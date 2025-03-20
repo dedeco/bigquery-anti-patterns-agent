@@ -165,7 +165,8 @@ class RuleBasedQueryOptimizer:
     @staticmethod
     def optimize_select_star(query: str) -> str:
         """Replace SELECT * with specific columns"""
-        return query.replace("SELECT *", "SELECT id, name, value, timestamp /* specify only needed columns */")
+        return query.replace("SELECT *", "SELECT id, name, value, timestamp "
+                                         "/* specify only needed columns */")
 
     @staticmethod
     def optimize_with_clauses(query: str) -> str:
@@ -175,18 +176,21 @@ class RuleBasedQueryOptimizer:
     @staticmethod
     def optimize_subquery_with_aggregation(query: str) -> str:
         """Optimize subqueries with aggregation"""
-        return "-- Recommendation: Consider using JOIN with pre-aggregated tables instead of subqueries\n" + query
+        return "-- Recommendation: Consider using JOIN with pre-aggregated " \
+               "tables instead of subqueries\n" + query
 
     @staticmethod
     def optimize_distinct_in_subquery(query: str) -> str:
         """Optimize DISTINCT in subqueries"""
-        return "-- Recommendation: Consider using EXISTS or GROUP BY instead of DISTINCT in subqueries\n" + query
+        return "-- Recommendation: Consider using EXISTS or GROUP BY instead " \
+               "of DISTINCT in subqueries\n" + query
 
     @staticmethod
     def add_limit_to_order_by(query: str) -> str:
         """Add LIMIT to queries with ORDER BY"""
         if "ORDER BY" in query.upper() and "LIMIT" not in query.upper():
-            return query + "\nLIMIT 1000 /* Added limit to improve performance */"
+            return query + "\nLIMIT 1000 /* Added limit to improve " \
+                           "performance */"
         return query
 
 
@@ -221,7 +225,8 @@ class BigQueryAnalysisModel(MCPModel):
         return filtered_queries
 
     def analyze_query(self, query_text: str) -> Dict[str, Any]:
-        """Analyze a query for anti-patterns using LLM if available, falling back to rules"""
+        """Analyze a query for anti-patterns using LLM if available, falling
+        back to rules"""
         if self.llm_analyzer:
             try:
                 llm_analysis = self.llm_analyzer.analyze_query(query_text)
