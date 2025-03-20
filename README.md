@@ -1,145 +1,198 @@
-# BigQuery Query Analyzer - MCP Server Implementation
+# BigQuery Query Analyzer
 
-This project implements a Model Context Protocol (MCP) server for analyzing and optimizing BigQuery SQL queries. The server provides tools to identify slow queries, analyze SQL anti-patterns, and generate optimized query suggestions.
+A comprehensive tool for analyzing and optimizing BigQuery SQL queries to improve performance and reduce costs.
 
-## Core Concepts
+## Overview
 
-This implementation follows the core concepts of the Model Context Protocol (MCP) as described in the [Python SDK](https://github.com/modelcontextprotocol/python-sdk#core-concepts).
-
-- **MCP Server**: The main server that processes incoming MCP contexts and returns responses.
-- **MCP Model**: The implementation of the core logic for query analysis.
-- **MCP Context**: Contains the actions and parameters for each request.
-- **MCP Action**: Specific operations that can be performed by the server.
-- **MCP Response**: The results returned from processing MCP contexts.
+The BigQuery Query Analyzer is a web application that helps data engineers and analysts identify anti-patterns in their SQL queries and provides optimized alternatives. It uses a combination of rule-based analysis and AI-powered recommendations to detect potential performance issues in your BigQuery queries.
 
 ## Features
 
-The server provides three main tools:
+- **Query Analysis**: Identify common BigQuery anti-patterns in your SQL queries
+- **Query Optimization**: Get optimized versions of your queries with explanatory comments
+- **Slow Query Monitoring**: View and filter slow-running queries
+- **AI-Powered Recommendations**: Get intelligent optimization suggestions using Claude AI (when configured)
+- **Detailed Explanations**: Understand why certain patterns are problematic and how to fix them
 
-1. **Get Slow Queries**: Retrieves a list of slow queries from a mock BigQuery database, with filtering options for runtime and user.
-2. **Analyze Queries**: Identifies SQL anti-patterns, such as:
-   - Using `SELECT *` without `EXCEPT`
-   - Multiple `WITH` clauses
-   - Subqueries with aggregation
-   - Subqueries with `DISTINCT`
-   - Too many joins
-   - `ORDER BY` without `LIMIT`
-3. **Query Optimization**: Provides optimized versions of queries based on identified issues.
+## Supported Anti-Patterns
 
-## Project Structure
+The analyzer can detect and fix several common BigQuery anti-patterns:
 
-- `mcp_server.py`: The core MCP server implementation with the query analysis model
-- `mcp_client.py`: A client script to interact with the MCP server
-- `web_interface.py`: A FastAPI web application to interact with the MCP server through a UI
-- `templates/`: HTML templates for the web interface
+1. **SELECT * without EXCEPT**: Using `SELECT *` is cost inefficient; use specific columns or `SELECT * EXCEPT`
+2. **Multiple WITH clause references**: Multiple references to the same WITH clause can lead to query plan explosion
+3. **Subqueries in filters without DISTINCT**: Subqueries in WHERE clauses should use DISTINCT when appropriate
+4. **ORDER BY without LIMIT**: Can cause Resources Exceeded errors for large result sets
+5. **REGEXP_CONTAINS for simple patterns**: Using LIKE is faster for simple pattern matching
+6. **Suboptimal JOIN order**: Placing smaller tables before larger tables can reduce performance
 
-## Usage Examples
+## How It Works
 
-### Using the MCP Server Directly
+### Query Analysis Flow
+
+When you select a query for analysis, the following process occurs:
+
+#### Step 1: User Selects a Query for Analysis
+
+When you click on the "Analyze" button for a specific query in the slow queries list, your browser makes a GET request to the `/analyze` endpoint with a query parameter containing the query ID:
+
+```
+GET /analyze?query_id=1
+```
+
+#### Step 2: FastAPI Route Handler is Triggered
+
+The `analyze_page` function in `app.py` handles this request:
 
 ```python
-from mcp_server import BigQueryAnalysisServer
-from mcp import MCPContext, MCPAction
-import asyncio
-import json
-
-async def example():
-    server = BigQueryAnalysisServer()
-    
-    # Get slow queries with min_runtime filter
-    context = MCPContext(
-        actions=[MCPAction(name="get_slow_queries", parameters={"min_runtime": 50000})]
-    )
-    response = await server.process(context)
-    slow_queries = json.loads(response.content)
-    print(f"Found {len(slow_queries)} slow queries")
-    
-    # Analyze a specific query
-    context = MCPContext(
-        actions=[MCPAction(name="analyze_query", parameters={"query_id": "5"})]
-    )
-    response = await server.process(context)
-    analysis = json.loads(response.content)
-    print(f"Analysis found {sum(analysis['analysis'].values())} issues")
-    
-    # Optimize a query
-    context = MCPContext(
-        actions=[MCPAction(name="optimize_query", parameters={
-            "query_text": "SELECT * FROM large_table WHERE date > '2023-01-01'"
-        })]
-    )
-    response = await server.process(context)
-    optimization = json.loads(response.content)
-    print(f"Optimized query: {optimization['optimized_query']}")
-
-# Run the example
-asyncio.run(example())
+@app.get("/analyze", response_class=HTMLResponse)
+async def analyze_page(request: Request, query_id: Optional[str] = None):
+    """Render the analysis page"""
+    if query_id:
+        # Get query by ID using the MCP tool
+        query = get_query_by_id(query_id)
+        
+        if query:
+            # Analyze the query using the MCP tool
+            analysis = analyze_query(query["query_text"])
+            
+            return templates.TemplateResponse("analyze.html", {
+                "request": request, 
+                "analysis": analysis,
+                "query_id": query_id
+            })
 ```
 
-### Using the Client Script
+#### Step 3: MCP Tool Retrieves the Query
 
-```bash
-python mcp_client.py
+The `get_query_by_id` MCP tool is called with the query ID:
+
+```python
+query = get_query_by_id(query_id)
 ```
 
-### Running the Web Interface
+This tool searches through the database (or mock data) to find the query with the matching ID and returns its details.
 
-```bash
-python app.py
+#### Step 4: MCP Tool Analyzes the Query
+
+The `analyze_query` MCP tool is called with the query text:
+
+```python
+analysis = analyze_query(query["query_text"])
 ```
 
-Then navigate to http://localhost:8000 in your web browser.
+This function performs the following steps:
 
-## Anti-Pattern Detection
+1. **BigQuery-specific Analysis**:
+   - First, it uses the BigQuery anti-patterns module to check for common issues
+   - It analyzes the query structure using regex patterns and heuristics
 
-The system identifies several common BigQuery SQL anti-patterns:
+2. **LLM Analysis Attempt** (if available):
+   - If configured, it will use Claude AI to analyze the query
+   - The LLM integration makes an API call to Anthropic's Claude
+   - It sends the query text along with instructions to analyze for SQL anti-patterns
+   - Claude returns a JSON response with analysis results and explanations
 
-1. **SELECT * Without EXCEPT**:
-   - Problem: Retrieves unnecessary columns, increasing I/O and network usage
-   - Solution: Specify only needed columns or use `SELECT * EXCEPT (col1, col2)`
+3. **Fallback to Rule-Based Analysis** (if LLM fails):
+   - If Claude is not available or fails, it falls back to rule-based analysis
+   - This uses regex patterns to detect common SQL anti-patterns
 
-2. **Multiple WITH Clauses**:
-   - Problem: Can make query optimization difficult
-   - Solution: Consolidate related WITH clauses or use temporary tables
+#### Step 5: Template Rendering
 
-3. **Subqueries with Aggregation**:
-   - Problem: Inefficient data processing, especially with large datasets
-   - Solution: Use JOINs with pre-aggregated tables
+Once analysis is complete, the results are passed to the template renderer:
 
-4. **Subqueries with DISTINCT**:
-   - Problem: Expensive operation, especially within subqueries
-   - Solution: Replace with EXISTS or GROUP BY
+```python
+return templates.TemplateResponse("analyze.html", {
+    "request": request, 
+    "analysis": analysis,
+    "query_id": query_id
+})
+```
 
-5. **Too Many Joins**:
-   - Problem: Performance degradation with multiple joins
-   - Solution: Consider denormalizing or using materialized views
+The Jinja2 template engine processes `analyze.html` and injects the analysis results.
 
-6. **ORDER BY Without LIMIT**:
-   - Problem: Sorts the entire result set even if only a few rows are needed
-   - Solution: Add a LIMIT clause to improve performance
+#### Step 6: HTML Response
 
-## Future Enhancements
+The rendered HTML is sent back to the browser, displaying:
 
-- Connect to actual BigQuery for real query analysis
-- Expand anti-pattern detection rules
-- Improve optimization suggestions with query-specific context
-- Add query execution time estimation
-- Implement user authentication and query history tracking
+1. **The Original Query**: Shown in a formatted code block
+2. **Analysis Results Table**: A table showing:
+   - Each potential anti-pattern (SELECT *, multiple WITH clauses, etc.)
+   - Status (Issue Detected or OK)
+   - Description/explanation of the issue
 
-## Requirements
+#### Step 7: User Interaction
 
-- Python 3.7+
-- FastAPI
-- MCP SDK
-- Uvicorn
-- Jinja2
+From here, you can:
+- View the detailed analysis
+- Request query optimization by clicking the "Get Optimization Suggestions" button
+- Go back to the query list or submit a different query
+
+### Behind the Scenes: MCP Tools Framework
+
+The MCP (Model Context Protocol) Tools framework provides a structured approach for these operations:
+
+- Each function is wrapped with `@mcp.tool()` to register it as a tool
+- Documentation is automatically generated from the function docstrings
+- Each tool has a clear purpose and interface
+- Tools can be called by name from different parts of the application
+
+This structure makes the application more maintainable and easier to extend with new analysis techniques or data sources in the future.
 
 ## Installation
 
-```bash
-pip install mcp fastapi uvicorn jinja2
-```
+### Prerequisites
+
+- Python 3.7+
+- pip
+- An Anthropic API key (optional, for AI-powered recommendations)
+
+### Setup
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/yourusername/bigquery-query-analyzer.git
+   cd bigquery-query-analyzer
+   ```
+
+2. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. Set up environment variables (optional, for AI features):
+   ```bash
+   cp .env.example .env
+   # Edit .env with your Anthropic API key
+   ```
+
+4. Run the application:
+   ```bash
+   ./run_app.sh
+   ```
+
+5. Access the web interface at http://localhost:8000
+
+## Usage
+
+1. **View Slow Queries**: Navigate to the "Slow Queries" section to see a list of slow-running queries
+2. **Analyze a Query**:
+   - Click "Analyze" on any query in the list, or
+   - Go to the "Analyze" page and enter your SQL query
+3. **Optimize a Query**:
+   - After analysis, click "Get Optimization Suggestions" to see an optimized version
+   - The optimized query includes explanatory comments for all changes made
+
+## Configuration
+
+The application can be configured using environment variables:
+
+- `ANTHROPIC_API_KEY`: Your Anthropic API key for using Claude AI
+- `ANTHROPIC_MODEL`: The Claude model to use (default: claude-3-haiku-20240307)
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-MIT License
+This project is licensed under the MIT License - see the LICENSE file for details.
