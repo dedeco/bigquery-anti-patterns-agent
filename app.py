@@ -1,5 +1,5 @@
 from typing import Dict, List, Any, Optional
-from fastapi import FastAPI, Request, Form
+from fastapi import FastAPI, Request, Form, Depends
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
 import os
@@ -7,10 +7,12 @@ import re
 import json
 from mcp.server.fastmcp import FastMCP
 from llm_integration import LLMQueryAnalyzer
+from starlette.middleware.sessions import SessionMiddleware
 
 # Set up FastMCP
 mcp = FastMCP("BigQuery Query Analyzer")
 app = FastAPI(title="BigQuery Query Analyzer")
+app.add_middleware(SessionMiddleware, secret_key="your-secret-key")
 templates = Jinja2Templates(directory="templates")
 
 # Mock BigQuery data - this would typically come from a real database
@@ -387,12 +389,17 @@ async def analyze_page(request: Request, query_id: Optional[str] = None):
             # Analyze the query using the MCP tool
             analysis = analyze_query(query["query_text"])
             
+            # Store analysis in session for optimization step
+            request.session["last_query"] = query["query_text"]
+            request.session["last_analysis"] = analysis
+            
             return templates.TemplateResponse(
                 "analyze.html", 
                 {
                     "request": request, 
                     "analysis": analysis,
-                    "query_id": query_id
+                    "query_id": query_id,
+                    "query_text": query["query_text"]
                 }
             )
     
@@ -405,10 +412,14 @@ async def analyze_query_endpoint(request: Request, query_text: str = Form(...)):
     # Analyze the query using the MCP tool
     analysis = analyze_query(query_text)
     
+    # Store analysis in session for optimization step
+    request.session["last_query"] = query_text
+    request.session["last_analysis"] = analysis
+    
     return templates.TemplateResponse(
         "analyze.html", 
         {
-            "request": request, 
+            "request": request,
             "analysis": analysis,
             "query_text": query_text
         }
@@ -445,6 +456,35 @@ async def optimize_page(request: Request, query_id: Optional[str] = None):
                 }
             )
     
+    # Check if we have a stored query and analysis from the previous step
+    last_query = request.session.get("last_query")
+    last_analysis = request.session.get("last_analysis")
+    
+    if last_query and last_analysis:
+        # Optimize the stored query
+        optimized_query = optimize_query(last_query, last_analysis)
+        
+        optimization = {
+            "original_query": last_query,
+            "analysis": last_analysis["analysis"],
+            "explanations": last_analysis.get("explanations", {}),
+            "optimized_query": optimized_query
+        }
+        
+        # Clear the session data
+        if "last_query" in request.session:
+            del request.session["last_query"]
+        if "last_analysis" in request.session:
+            del request.session["last_analysis"]
+        
+        return templates.TemplateResponse(
+            "optimize.html", 
+            {
+                "request": request, 
+                "optimization": optimization
+            }
+        )
+    
     return templates.TemplateResponse("optimize.html", {"request": request})
 
 
@@ -472,9 +512,6 @@ async def optimize_query_endpoint(request: Request, query_text: str = Form(...))
             "query_text": query_text
         }
     )
-
-
-# MCP FastAPI integration
 
 
 if __name__ == "__main__":
