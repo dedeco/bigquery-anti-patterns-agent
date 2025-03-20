@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Optimize Query - BigQuery Analyzer</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/addon/diff/merge.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container mt-5">
+        <h1>Optimize Query</h1>
+        <a href="/" class="btn btn-secondary mb-3">Back to Home</a>
+        
+        <div class="card mb-4">
+            <div class="card-header">Enter SQL Query</div>
+            <div class="card-body">
+                <form method="post" action="/optimize">
+                    <div class="mb-3">
+                        <textarea class="form-control" id="query_text" name="query_text" rows="8" required>{{ query_text if query_text else "" }}</textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Optimize Query</button>
+                </form>
+            </div>
+        </div>
+        
+        {% if optimization %}
+        <div class="card">
+            <div class="card-header">Optimization Results</div>
+            <div class="card-body">
+                <ul class="nav nav-tabs" id="queryTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="original-tab" data-bs-toggle="tab" data-bs-target="#original" type="button" role="tab">Original Query</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="optimized-tab" data-bs-toggle="tab" data-bs-target="#optimized" type="button" role="tab">Optimized Query</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="analysis-tab" data-bs-toggle="tab" data-bs-target="#analysis" type="button" role="tab">Analysis</button>
+                    </li>
+                </ul>
+                <div class="tab-content pt-3" id="queryTabsContent">
+                    <div class="tab-pane fade show active" id="original" role="tabpanel">
+                        <pre class="bg-light p-3" id="original-query">{{ optimization.original_query }}</pre>
+                    </div>
+                    <div class="tab-pane fade" id="optimized" role="tabpanel">
+                        <pre class="bg-light p-3" id="optimized-query">{{ optimization.optimized_query }}</pre>
+                    </div>
+                    <div class="tab-pane fade" id="analysis" role="tabpanel">
+                        <div class="table-responsive">
+                            <table class="table table-bordered">
+                                <thead>
+                                    <tr>
+                                        <th>Anti-Pattern</th>
+                                        <th>Status</th>
+                                        <th>Recommendation</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for pattern, detected in optimization.analysis.items() %}
+                                    <tr class="{{ 'table-danger' if detected else 'table-success' }}">
+                                        <td>{{ pattern }}</td>
+                                        <td>
+                                            {% if detected %}
+                                            <span class="badge bg-danger">Issue Detected</span>
+                                            {% else %}
+                                            <span class="badge bg-success">OK</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if detected and pattern in optimization.explanations %}
+                                            {{ optimization.explanations[pattern] }}
+                                            {% elif pattern == "select_star" and detected %}
+                                            Replace SELECT * with specific columns to reduce I/O and bandwidth usage.
+                                            {% elif pattern == "multiple_with_clauses" and detected %}
+                                            Consider consolidating WITH clauses or using temporary tables.
+                                            {% elif pattern == "subquery_with_aggregation" and detected %}
+                                            Use JOIN with pre-aggregated tables instead of aggregation in subqueries.
+                                            {% elif pattern == "subquery_with_distinct" and detected %}
+                                            Replace DISTINCT in subqueries with EXISTS or GROUP BY.
+                                            {% elif pattern == "too_many_joins" and detected %}
+                                            Consider denormalizing or using materialized views.
+                                            {% elif pattern == "order_by_without_limit" and detected %}
+                                            Add a LIMIT clause when using ORDER BY to avoid sorting the entire result set.
+                                            {% else %}
+                                            No optimization needed for this pattern.
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/sql/sql.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var editor = CodeMirror.fromTextArea(document.getElementById('query_text'), {
+                mode: 'text/x-sql',
+                lineNumbers: true,
+                theme: 'default',
+                indentWithTabs: true,
+                smartIndent: true,
+                lineWrapping: true
+            });
+            
+            {% if optimization %}
+            // Format original and optimized code areas
+            CodeMirror.fromTextArea(document.getElementById('original-query'), {
+                mode: 'text/x-sql',
+                lineNumbers: true,
+                theme: 'default',
+                readOnly: true
+            });
+            
+            CodeMirror.fromTextArea(document.getElementById('optimized-query'), {
+                mode: 'text/x-sql',
+                lineNumbers: true,
+                theme: 'default',
+                readOnly: true
+            });
+            {% endif %}
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Slow Queries - BigQuery Analyzer</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container mt-5">
+        <h1>Slow Queries</h1>
+        <a href="/" class="btn btn-secondary mb-3">Back to Home</a>
+        
+        <div class="card mb-4">
+            <div class="card-header">Filter Queries</div>
+            <div class="card-body">
+                <form method="get" action="/slow-queries">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="min_runtime" class="form-label">Minimum Runtime (ms)</label>
+                                <input type="number" class="form-control" id="min_runtime" name="min_runtime" value="{{ min_runtime }}">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="user" class="form-label">User</label>
+                                <input type="text" class="form-control" id="user" name="user" value="{{ user }}">
+                            </div>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Apply Filters</button>
+                </form>
+            </div>
+        </div>
+        
+        {% if queries %}
+        <div class="table-responsive">
+            <table class="table table-striped table-bordered">
+                <thead>
+                    <tr>
+                        <th>Query ID</th>
+                        <th>User</th>
+                        <th>Runtime (ms)</th>
+                        <th>Timestamp</th>
+                        <th>Bytes Processed</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for query in queries %}
+                    <tr>
+                        <td>{{ query.query_id }}</td>
+                        <td>{{ query.user }}</td>
+                        <td>{{ query.runtime_ms }}</td>
+                        <td>{{ query.timestamp }}</td>
+                        <td>{{ query.bytes_processed }}</td>
+                        <td>
+                            <div class="btn-group">
+                                <a href="/analyze?query_id={{ query.query_id }}" class="btn btn-sm btn-info">Analyze</a>
+                                <a href="/optimize?query_id={{ query.query_id }}" class="btn btn-sm btn-success">Optimize</a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="accordion mt-4" id="queryAccordion">
+            {% for query in queries %}
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="heading{{ query.query_id }}">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ query.query_id }}">
+                        Query {{ query.query_id }} - {{ query.user }} ({{ query.runtime_ms }}ms)
+                    </button>
+                </h2>
+                <div id="collapse{{ query.query_id }}" class="accordion-collapse collapse" data-bs-parent="#queryAccordion">
+                    <div class="accordion-body">
+                        <pre>{{ query.query_text }}</pre>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="alert alert-info">No queries found matching the criteria.</div>
+        {% endif %}
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
