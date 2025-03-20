@@ -111,7 +111,9 @@ class LLMQueryAnalyzer:
                         result = json.loads(json_match.group(0))
                     else:
                         raise Exception("Could not extract JSON from LLM response")
-            
+
+            print(result)
+
             # Ensure the result has the expected structure
             if "analysis" not in result:
                 raise Exception("LLM response doesn't contain 'analysis' key")
