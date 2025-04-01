@@ -27,24 +27,37 @@
         <div class="card">
             <div class="card-header">Optimization Results</div>
             <div class="card-body">
+
                 <ul class="nav nav-tabs" id="queryTabs" role="tablist">
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link active" id="original-tab" data-bs-toggle="tab" data-bs-target="#original" type="button" role="tab">Original Query</button>
+                        <button class="nav-link active" id="optimized-tab" data-bs-toggle="tab" data-bs-target="#optimized" type="button" role="tab">Optimized Query</button>
                     </li>
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link" id="optimized-tab" data-bs-toggle="tab" data-bs-target="#optimized" type="button" role="tab">Optimized Query</button>
+                        <button class="nav-link" id="original-tab" data-bs-toggle="tab" data-bs-target="#original" type="button" role="tab">Original Query</button>
                     </li>
                     <li class="nav-item" role="presentation">
                         <button class="nav-link" id="analysis-tab" data-bs-toggle="tab" data-bs-target="#analysis" type="button" role="tab">Analysis</button>
                     </li>
                 </ul>
+
                 <div class="tab-content pt-3" id="queryTabsContent">
-                    <div class="tab-pane fade show active" id="original" role="tabpanel">
-                        <pre class="bg-light p-3" id="original-query">{{ optimization.original_query }}</pre>
+                    <!-- Optimized Query Tab -->
+                    <div class="tab-pane fade show active" id="optimized" role="tabpanel">
+         
+                        <div class="bg-light p-3">
+                            <code class="d-block" style="white-space: pre-wrap;">{{ optimization.optimized_query }}</code>
+                        </div>
                     </div>
-                    <div class="tab-pane fade" id="optimized" role="tabpanel">
-                        <pre class="bg-light p-3" id="optimized-query">{{ optimization.optimized_query }}</pre>
+
+                    <!-- Original Query Tab -->
+                    <div class="tab-pane fade" id="original" role="tabpanel">
+    
+                        <div class="bg-light p-3">
+                            <code class="d-block" style="white-space: pre-wrap;">{{ optimization.original_query }}</code>
+                        </div>
                     </div>
+
+                    <!-- Analysis Tab -->
                     <div class="tab-pane fade" id="analysis" role="tabpanel">
                         <div class="table-responsive">
                             <table class="table table-bordered">
@@ -102,6 +115,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/sql/sql.min.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            // Initialize the query input editor
             var editor = CodeMirror.fromTextArea(document.getElementById('query_text'), {
                 mode: 'text/x-sql',
                 lineNumbers: true,
@@ -112,20 +126,27 @@
             });
             
             {% if optimization %}
-            // Format original and optimized code areas
-            CodeMirror.fromTextArea(document.getElementById('original-query'), {
+            // Initialize the original query display
+            var originalEditor = CodeMirror.fromTextArea(document.getElementById('original-query'), {
                 mode: 'text/x-sql',
                 lineNumbers: true,
                 theme: 'default',
-                readOnly: true
+                readOnly: true,
+                lineWrapping: true
             });
             
-            CodeMirror.fromTextArea(document.getElementById('optimized-query'), {
+            // Initialize the optimized query display
+            var optimizedEditor = CodeMirror.fromTextArea(document.getElementById('optimized-query'), {
                 mode: 'text/x-sql',
                 lineNumbers: true,
                 theme: 'default',
-                readOnly: true
+                readOnly: true,
+                lineWrapping: true
             });
+
+            // Refresh the editors to ensure proper display
+            originalEditor.refresh();
+            optimizedEditor.refresh();
             {% endif %}
         });
     </script>
